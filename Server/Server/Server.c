@@ -1,4 +1,8 @@
 //A simple server application using TCPv6-Sockets
+// sources:
+//http://www.c-worker.ch/tuts/select.php
+//https://docs.microsoft.com/en-us/windows/win32/winsock/getting-started-with-winsock
+#define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,40 +11,43 @@
 #include <ws2tcpip.h>
 #pragma comment(lib, "Ws2_32.lib")
 
-#define DEFAULT_FAMILY     AF_INET6     // Protocol family - in this case force IPv6
-#define DEFAULT_SOCKTYPE   SOCK_STREAM  // TCP uses SOCK_STREAM, UDP uses SOCK_DGRAM
-#define DEFAULT_PORT       "1234"       // The port for testing
-#define BUFFER_SIZE        1024         // The buffer size for the demonstration
+#define DEFAULT_FAMILY     AF_INET6     //Protocol family - in this case force IPv6
+#define DEFAULT_SOCKTYPE   SOCK_STREAM  //TCP uses SOCK_STREAM, UDP uses SOCK_DGRAM
+#define DEFAULT_PORT       "1234"       //The port for testing
+#define BUFFER_SIZE        1024         //The buffer size for the demonstration
+#define MAX_CLIENTS		   10
 
 int main(int argc, char* argv[]) {
 	char buffer[BUFFER_SIZE];
 	SOCKET ListenSocket = INVALID_SOCKET;
-	SOCKET ClientSocket = INVALID_SOCKET;
 	struct addrinfo* result = NULL, * ptr = NULL, hints;
 	int iResult, iSendResult;
-	char recvbuf[BUFFER_SIZE];
-	int recvbuflen = BUFFER_SIZE;
+	char receiveBuffer[BUFFER_SIZE];
+	int bufferLength = BUFFER_SIZE;
+	FD_SET fdSet;
+	SOCKET clients[MAX_CLIENTS];
+	int i;
 
-	// argc[0] = sNummer, argc[1] = portnumber where server listens argc < 2
-	if (argc < 1) {
-		fprintf(stderr, "Application needs sNumber and portnumber as arguments.\n");
-		exit(1);
-	}
+	//argv[0] = portnumber where server listens, argv[1] = sNumber
+	//if (argc < 2) {
+	//	fprintf(stderr, "Application needs sNumber and portnumber as arguments.\n");
+	//	exit(1);
+	//}
 
-	printf("\nServer has been started.\n");
+	printf("Server has been started.\n");
 
-	// Initialise TCP for Windows ("Winsock").
+	//initialise TCP for Windows ("Winsock")
 	WORD wVersionRequested; //WORD = unsigned long data type, version of the Winsocket
-	WSADATA wsaData; // stores information about the Winsocket implementation
+	WSADATA wsaData; //stores information about the Winsocket implementation
 	wVersionRequested = MAKEWORD(2, 2); //MAKEWORD = macro to request version 2.2
 
 	iResult = WSAStartup(wVersionRequested, &wsaData); //makes it possible for the process to run WINSOCK.DLL
 	if (iResult != 0) {
-		printf("\nError on initialising Winsock.\n");
+		printf("Error on initialising Winsock.\n");
 		exit(1);
 	}
 	else {
-		printf("\nWinsock initialised.\n");
+		printf("Winsock initialised.\n");
 	}
 
 	ZeroMemory(&hints, sizeof(hints)); //Macro to fill a block of memory with zeros
@@ -56,91 +63,104 @@ int main(int argc, char* argv[]) {
 		exit(1);
 	}
 
-	// Open a socket with the correct address family for this address.
+	//open a socket with the correct address family for this address
 	ListenSocket = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
 	if (ListenSocket == INVALID_SOCKET) {
-		printf("\nError opening socket.\n");
+		printf("Error opening socket.\n");
 		freeaddrinfo(result);
 		WSACleanup();
 		exit(1);
 	}
 	else {
-		printf("\nSocket has been opened.\n");
+		printf("Socket has been opened.\n");
 	}
 
-	// bind() the server that will accept client connections to a network address
-	// sockaddr holds information about the IP address and port number
+	//bind() the server that will accept client connections to a network address
+	//sockaddr holds information about the IP address and port number
 	iResult = bind(ListenSocket, result->ai_addr, (int)result->ai_addrlen);
 	if (iResult == SOCKET_ERROR) {
-		printf("\nError on binding socket.\n");
+		printf("Error on binding socket.\n");
 		freeaddrinfo(result);
 		closesocket(ListenSocket);
 		WSACleanup();
 		exit(1);
 	}
 	else {
-		printf("\nBinding successful.\n");
+		printf("Binding successful.\n");
 	}
 
 	//listen() for incoming connections
-	if (listen(ListenSocket, 5) == SOCKET_ERROR) { //5 = maximum length of the queue of pending connections to accept
+	if (listen(ListenSocket, 10) == SOCKET_ERROR) { //5 = maximum length of the queue of pending connections to accept
 		printf("\nError on listening.\n");
 		closesocket(ListenSocket);
 		WSACleanup();
 		exit(1);
 	}
 	else {
-		printf("\nListening on port %s.\n", DEFAULT_PORT);
+		printf("Listening on port %s.\n", DEFAULT_PORT);
 	}
 
-	//accept() a new connection
-	ClientSocket = accept(ListenSocket, NULL, NULL);
-	if (ClientSocket == INVALID_SOCKET) {
-		printf("\nError on accept.\n");
-		closesocket(ListenSocket);
-		WSACleanup();
-		exit(1);
+	//set all possible clients to INVALID_SOCKET
+	for (i = 0;i < MAX_CLIENTS;i++) {
+		clients[i] = INVALID_SOCKET;
 	}
 
+	while (1) {
+		FD_ZERO(&fdSet); //Initializes the file descriptor set fdset to have zero bits for all file descriptors - empty the set
+		FD_SET(ListenSocket, &fdSet); //add the socket which listens and awaits connections from clients
 
-	do {
-
-		iResult = recv(ClientSocket, recvbuf, recvbuflen, 0);
-		if (iResult > 0) {
-			printf("Bytes received: %d\n", iResult);
-			printf("Message: %s\n", recvbuf);
-
-			// Echo the buffer back to the sender
-			iSendResult = send(ClientSocket, recvbuf, iResult, 0);
-			if (iSendResult == SOCKET_ERROR) {
-				printf("send failed: %d\n", WSAGetLastError());
-				closesocket(ClientSocket);
-				WSACleanup();
-				return 1;
+		// put all other available sockets that are not an INVALID_SOCKET into the set too, because we want to know which clients want to connect or send messages 
+		for (i = 0;i < MAX_CLIENTS;i++) {
+			if (clients[i] != INVALID_SOCKET) {
+				FD_SET(clients[i], &fdSet);
 			}
-			printf("Bytes sent: %d\n", iSendResult);
-		}
-		else if (iResult == 0)
-			printf("Connection closing...\n");
-		else {
-			printf("recv failed: %d\n", WSAGetLastError());
-			closesocket(ClientSocket);
-			WSACleanup();
-			return 1;
 		}
 
-	} while (iResult > 0);
+		//wait for something to happen on any of the sockets in fdSet, last parameter indicates the timeout (NULL means wait indefinitely)
+		iResult = select(0, &fdSet, NULL, NULL, NULL);
+		if (iResult == SOCKET_ERROR) {
+			printf("Error on select.\n");
+			exit(1);
+		}
 
-	iResult = shutdown(ClientSocket, SD_SEND);
-	if (iResult == SOCKET_ERROR) {
-		printf("shutdown failed: %d\n", WSAGetLastError());
-		closesocket(ClientSocket);
-		WSACleanup();
-		return 1;
+		//when something happens on the socket the server is listening on it means a client wants to connect
+		if (FD_ISSET(ListenSocket, &fdSet)) {
+			//look for a place to store the new client in 
+			for (i = 0; i < MAX_CLIENTS; i++) {
+				if (clients[i] == INVALID_SOCKET) {
+					clients[i] = accept(ListenSocket, NULL, NULL);
+					printf("New client connection accepted.\n");
+					break;
+				}
+			}
+		}
+
+		//when something happens on any other socket other than the ListenSocket, it means an I/O operation is happening there
+		//check which other active sockets are in the set
+		for (i = 0; i < MAX_CLIENTS; i++) {
+			if (FD_ISSET(clients[i], &fdSet)) { //skip all sockets that have no client connected to them, only check those with an active connection
+				iResult = recv(clients[i], receiveBuffer, 1024, 0); //read the incoming message from the client
+				//if recv returns 0, the client has closed the connection
+				if (iResult == 0 || iResult == SOCKET_ERROR) {
+					printf("Client %d has disconnected\n", i);
+					closesocket(clients[i]); //close the socket   
+					clients[i] = INVALID_SOCKET; //make room for new clients
+				}
+				else {
+					//add null character to printf message in buffer
+					receiveBuffer[iResult] = '\0';
+					printf("Message: %s\n", receiveBuffer);
+
+					gets(buffer);
+					iResult = send(clients[i], buffer, (int)strlen(buffer), 0);
+					if (iResult == SOCKET_ERROR) {
+						printf("Send failed: %d\n", WSAGetLastError());
+						closesocket(clients[i]);
+						WSACleanup();
+						exit(1);
+					}
+				}
+			}
+		}
 	}
-
-	//close() the socket
-	closesocket(ClientSocket);
-	WSACleanup();
-	return 0;
 }

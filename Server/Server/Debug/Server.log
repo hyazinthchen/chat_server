@@ -1,3 +1,4 @@
 ﻿  Server.c
-D:\projects\chat_server\Server\Server\Server.c(16,7): warning C4101: 'buffer': unreferenced local variable
+D:\projects\chat_server\Server\Server\Server.c(154,10): warning C4013: 'gets' undefined; assuming extern returning int
+D:\projects\chat_server\Server\Server\Server.c(24,15): warning C4101: 'iSendResult': unreferenced local variable
   Server.vcxproj -> D:\projects\chat_server\Server\Debug\Server.exe
