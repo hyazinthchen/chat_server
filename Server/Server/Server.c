@@ -13,9 +13,47 @@
 
 #define DEFAULT_FAMILY     AF_INET6     //Protocol family - in this case force IPv6
 #define DEFAULT_SOCKTYPE   SOCK_STREAM  //TCP uses SOCK_STREAM, UDP uses SOCK_DGRAM
-#define DEFAULT_PORT       "1234"       //The port for testing
 #define BUFFER_SIZE        1024         //The buffer size for the demonstration
 #define MAX_CLIENTS		   10
+
+//data structure that will be sent to the client
+struct package {
+	char sNumber[7];
+	char txt[BUFFER_SIZE];
+};
+
+char* init_package(struct package p) {
+	char* package_ZK = NULL;
+	int sNumberLength = strlen(p.sNumber);
+	int txtLength = strlen(p.txt);
+	int totalLength = sNumberLength + 2 + txtLength - 1;
+	char spacer[2] = { ':', ' ' };
+
+	package_ZK = (char*)malloc(totalLength * sizeof(char)); //allocate memory for the package
+
+	if (package_ZK == NULL) {
+		printf("Error on building package.\n");
+		EXIT_FAILURE;
+	}
+
+	int i = 0;
+	int j = 0;
+
+	for (i; i < sNumberLength; i++) {
+		package_ZK[i] = p.sNumber[i];
+	}
+
+	package_ZK[i] = spacer[0];
+	i++;
+	package_ZK[i] = spacer[1];
+	i++;
+
+	for (j = 0, i; j <= txtLength; i++, j++) {
+		package_ZK[i] = p.txt[j];
+	}
+
+	return package_ZK;
+}
 
 int main(int argc, char* argv[]) {
 	char buffer[BUFFER_SIZE];
@@ -28,11 +66,13 @@ int main(int argc, char* argv[]) {
 	SOCKET clients[MAX_CLIENTS];
 	int i;
 
-	//argv[0] = portnumber where server listens, argv[1] = sNumber
-	//if (argc < 2) {
-	//	fprintf(stderr, "Application needs sNumber and portnumber as arguments.\n");
-	//	exit(1);
-	//}
+	if (argc < 2) {
+		fprintf(stderr, "Application needs port and S-Number as arguments.\n");
+		exit(1);
+	}
+
+	const char* port = argv[1];
+	const char* sNumber = argv[2];
 
 	printf("Server has been started.\n");
 
@@ -56,7 +96,7 @@ int main(int argc, char* argv[]) {
 	hints.ai_protocol = IPPROTO_TCP; //specifies the TCP protocol
 	hints.ai_flags = AI_PASSIVE; //flag to indicate that the returned socket address will be used in bind()
 
-	iResult = getaddrinfo(NULL, DEFAULT_PORT, &hints, &result);
+	iResult = getaddrinfo(NULL, port, &hints, &result);
 	if (iResult != 0) {
 		printf("getaddrinfo failed: %d\n", iResult);
 		WSACleanup();
@@ -90,15 +130,17 @@ int main(int argc, char* argv[]) {
 	}
 
 	//listen() for incoming connections
-	if (listen(ListenSocket, 10) == SOCKET_ERROR) { //5 = maximum length of the queue of pending connections to accept
+	if (listen(ListenSocket, 10) == SOCKET_ERROR) { //10 = maximum length of the queue of pending connections to accept
 		printf("\nError on listening.\n");
 		closesocket(ListenSocket);
 		WSACleanup();
 		exit(1);
 	}
 	else {
-		printf("Listening on port %s.\n", DEFAULT_PORT);
+		printf("Listening on port %s.\n", port);
 	}
+
+
 
 	//set all possible clients to INVALID_SOCKET
 	for (i = 0;i < MAX_CLIENTS;i++) {
@@ -149,10 +191,18 @@ int main(int argc, char* argv[]) {
 				else {
 					//add null character to printf message in buffer
 					receiveBuffer[iResult] = '\0';
-					printf("Message: %s\n", receiveBuffer);
+					printf("%s\n", receiveBuffer);
 
 					gets(buffer);
-					iResult = send(clients[i], buffer, (int)strlen(buffer), 0);
+
+					struct package p; //build new data package
+					strcpy(p.sNumber, sNumber); //fill data package with data
+					strcpy(p.txt, buffer);
+
+					char* package_ZK = NULL;
+					package_ZK = init_package(p); //pointer to the built data package
+
+					iResult = send(clients[i], package_ZK, (int)strlen(package_ZK), 0);
 					if (iResult == SOCKET_ERROR) {
 						printf("Send failed: %d\n", WSAGetLastError());
 						closesocket(clients[i]);
