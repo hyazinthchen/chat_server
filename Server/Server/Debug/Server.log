@@ -1,4 +1,4 @@
 ﻿  Server.c
-D:\projects\chat_server\Server\Server\Server.c(195,9): warning C4013: 'gets' undefined; assuming extern returning int
-D:\projects\chat_server\Server\Server\Server.c(62,15): warning C4101: 'iSendResult': unreferenced local variable
-  Server.vcxproj -> D:\projects\chat_server\Server\Debug\Server.exe
+D:\projects\chat_server\Server\Server\Server.c(138,49): warning C4133: 'function': incompatible types - from 'Packet *' to 'char *'
+D:\projects\chat_server\Server\Server\Server.c(148,9): warning C4013: 'gets' undefined; assuming extern returning int
+D:\projects\chat_server\Server\Server\Server.c(149,51): warning C4133: 'function': incompatible types - from 'Packet *' to 'const char *'
