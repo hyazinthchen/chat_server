@@ -54,7 +54,7 @@ int main(int argc, char* argv[]) {
 
 	//initalise datastruct
 	strcpy(message_serv.text, " ");
-	strcpy(message_serv.sNumber, argv[2]);
+	strcpy(message_serv.name, argv[2]);
 
 	printf("Server has been started.\n");
 
@@ -143,8 +143,8 @@ int main(int argc, char* argv[]) {
 				closesocket(clientSocket); //close the socket   
 				clientSocket = INVALID_SOCKET; //make room for new clients
 			} else {
-				printf("%s> %s\n", message_cli.sNumber, message_cli.text);
-				printf("%s> ", message_serv.sNumber);
+				printf("%s> %s\n", message_cli.name, message_cli.text);
+				printf("%s> ", message_serv.name);
 				gets(&message_serv.text);
 				returnValue = send(clientSocket, &message_serv, sizeof(message_serv), 0);
 				if (returnValue == SOCKET_ERROR) {
